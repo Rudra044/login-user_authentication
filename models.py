@@ -4,7 +4,8 @@ db = SQLAlchemy()
 
 
 class Profile(db.Model):
-    email_id = db.Column(db.String(250), unique=True, nullable=False, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
+    email_id = db.Column(db.String(250), unique=True, nullable=False)
     first_name = db.Column(db.String(250),  nullable=False)
     last_name=db.Column(db.String(250),  nullable=False)
     phone_number=db.Column(db.String(250), unique=True, nullable=False)

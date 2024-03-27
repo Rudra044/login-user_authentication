@@ -5,17 +5,11 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_mail import Mail,Message
 from urllib.parse import unquote_plus, quote_plus
+from config import Config
+from util.utils import add_user, del_user , commit_changes
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///todos.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAIL_SERVER'] ='smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USERNAME'] =''
-app.config['MAIL_PASSWORD'] = ''
-app.config['MAIL_USE_SSl'] = False
-app.config['MAIL_USE_TLS'] = True
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config.from_object(Config)
 db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
@@ -34,10 +28,7 @@ def create_user():
         if Profile.query.filter_by(email_id=email_id).first():
             return jsonify({'error': 'User with this email or username already exists'})
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-        new_user = Profile(email_id=email_id,first_name=first_name,last_name=last_name,
-                           phone_number =phone_number , password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
+        new_user = add_user(email_id, first_name, last_name, phone_number, hashed_password)
         return jsonify({'message': 'User created successfully'})
      else:
         return jsonify({'error': 'All fields need to be provided'})
@@ -58,11 +49,10 @@ def login():
 @app.route('/delete',methods=['DELETE'])
 @jwt_required()
 def delete_user():
-    current_user_email_id = get_jwt_identity()
-    user = Profile.query.filter_by(email_id=current_user_email_id).first()
+    email_id = get_jwt_identity()
+    user = Profile.query.filter_by(email_id=email_id).first()
     if user:
-        db.session.delete(user)
-        db.session.commit()
+        del_user(user)
         return jsonify({'message': 'data deleted'})
     else:
         return jsonify({'error': 'Username are required'})
@@ -79,11 +69,17 @@ def update_phone():
     phone_number=data.get('phone_number')
     first_name = data.get('first_name')
     last_name= data.get('last_name')
-    user.phone_number = phone_number
-    user.first_name = first_name
-    user.last_name = last_name
-    db.session.commit()
-    return jsonify({'message': 'Phone number updated successfully'})
+    if phone_number:
+        user.phone_number = phone_number
+        return jsonify({'message': 'Phone number updated successfully'})
+    if first_name:
+        user.first_name = first_name
+        return jsonify({'message': 'first_name updated successfully'})
+    if last_name:
+       user.last_name = last_name
+       return jsonify({'message': 'last_name updated successfully'})
+    commit_changes()
+    return jsonify({'message': 'invalid input'})
 
 @app.route('/users', methods=['GET'])
 @jwt_required()
@@ -100,6 +96,7 @@ def change_password():
     data = request.json
     password = data.get('password')
     new_password = data.get('new_password')
+    confirm_new_password = data.get('confirm_new_password')
     
     user = Profile.query.filter_by(email_id=email_id).first()
     if not user:
@@ -110,10 +107,14 @@ def change_password():
 
     if not new_password:
         return jsonify({'message': 'New password not provided'})
+    if not confirm_new_password:
+        return jsonify({'message': 'Confirm_New password not provided'})
+    if confirm_new_password != new_password:
+        return jsonify({'message': 'Confirm_New password and new password field not match'})
 
     hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
     user.password = hashed_password
-    db.session.commit()
+    commit_changes()
 
     return jsonify({'message': 'Password changed successfully'})
 
@@ -127,10 +128,9 @@ def forget_password():
     user = Profile.query.filter_by(email_id=email_id).first()
     if not user:
         return jsonify({'message': 'User not found'})
-    else: 
-         reset_token = create_access_token(identity=email_id)  
+    else:  
          encoded_email_id = quote_plus(email_id) 
-         reset_link = f'http://127.0.0.1:5000/reset_password/{encoded_email_id}/{reset_token}'
+         reset_link = f'http://127.0.0.1:5000/reset_password/{encoded_email_id}'
          msg = Message( 
                 'Hello', 
                 sender ='',
@@ -145,18 +145,21 @@ def forget_password():
 def reset_password(encoded_email_id, reset_token):
     
 
-    email = unquote_plus(encoded_email_id)  
-    reset_token = unquote_plus(reset_token) 
+    email_id = unquote_plus(encoded_email_id)  
     data = request.json
     new_password = data.get('new_password')
+    confirm_new_password = data.get('confirm_new_password')
    
-    user = Profile.query.filter_by(email_id=email).first()
+    user = Profile.query.filter_by(email_id=email_id).first()
     if not user:
         return jsonify({'message': 'Invalid email ID'})
+    if confirm_new_password != new_password:
+        return jsonify({'message': 'Confirm_New password and new password field not match'})
+
     
     hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
     user.password = hashed_password
-    db.session.commit()
+    commit_changes()
     
     return jsonify({'message': 'Password reset successfully'})
         
