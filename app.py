@@ -7,6 +7,7 @@ from flask_mail import Mail,Message
 from urllib.parse import unquote_plus, quote_plus
 from config import Config
 from util.utils import add_user, del_user , commit_changes
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -14,6 +15,7 @@ db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 mail=Mail(app)
+migrate=Migrate(app,db)
             
 
 @app.route("/register",methods=['POST'])
@@ -142,7 +144,7 @@ def forget_password():
 
 
 @app.route('/reset_password/<encoded_email_id>/<reset_token>', methods=['POST'])
-def reset_password(encoded_email_id, reset_token):
+def reset_password(encoded_email_id):
     
 
     email_id = unquote_plus(encoded_email_id)  
@@ -164,6 +166,4 @@ def reset_password(encoded_email_id, reset_token):
     return jsonify({'message': 'Password reset successfully'})
         
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
